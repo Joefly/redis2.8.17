@@ -31,7 +31,8 @@
 #ifndef __SDS_H
 #define __SDS_H
 
-#define SDS_MAX_PREALLOC (1024*1024)
+//最大分配内存是1M
+#define SDS_MAX_PREALLOC (1024*1024)	
 
 #include <sys/types.h>
 #include <stdarg.h>
@@ -43,16 +44,18 @@
 typedef char *sds;
 
 struct sdshdr {
-    unsigned int len;
-    unsigned int free;
-    char buf[];
+    unsigned int len;				//已使用的空间，buf中字符串的长度，不包括字符串结尾的‘\0’空字符
+    unsigned int free;				//未使用空间
+    char buf[];						//实际存储字符串的地方，采用byte数组的方式，保证了是二进制安全的。
 };
 
+//计算sds的长度，计算方法不明白？
 static __inline size_t sdslen(const sds s) {
     struct sdshdr *sh = (void*)(s-(sizeof(struct sdshdr)));
     return sh->len;
 }
 
+//获取sds的可用空间大小
 static __inline size_t sdsavail(const sds s) {
     struct sdshdr *sh = (void*)(s-(sizeof(struct sdshdr)));
     return sh->free;

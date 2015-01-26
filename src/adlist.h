@@ -40,17 +40,17 @@ typedef struct listNode {
 } listNode;
 
 typedef struct listIter {
-    listNode *next;
+    listNode *next;							//当前迭代位置的下一节点
     int direction;
 } listIter;
 
 typedef struct list {
     listNode *head;
     listNode *tail;
-    void *(*dup)(void *ptr);
-    void (*free)(void *ptr);
-    int (*match)(void *ptr, void *key);
-    unsigned long len;
+    void *(*dup)(void *ptr);				//复制函数指针
+    void (*free)(void *ptr);				//释放函数指针
+    int (*match)(void *ptr, void *key);		//比较函数指针
+    unsigned long len;						//链表长度
 } list;
 
 /* Functions implemented as macros */
@@ -61,15 +61,15 @@ typedef struct list {
 #define listNextNode(n) ((n)->next)
 #define listNodeValue(n) ((n)->value)
 
-#define listSetDupMethod(l,m) ((l)->dup = (m))
-#define listSetFreeMethod(l,m) ((l)->free = (m))
+#define listSetDupMethod(l,m) ((l)->dup = (m))			//链表复制方法的设置
+#define listSetFreeMethod(l,m) ((l)->free = (m))		//链表释放方法的设置
 #define listSetMatchMethod(l,m) ((l)->match = (m))
 
-#define listGetDupMethod(l) ((l)->dup)
+#define listGetDupMethod(l) ((l)->dup)					//链表复制方法的获取
 #define listGetFree(l) ((l)->free)
 #define listGetMatchMethod(l) ((l)->match)
 
-/* Prototypes */
+/* Prototypes 函数申明*/
 list *listCreate(void);
 void listRelease(list *list);
 list *listAddNodeHead(list *list, void *value);
@@ -82,9 +82,9 @@ void listReleaseIterator(listIter *iter);
 list *listDup(list *orig);
 listNode *listSearchKey(list *list, void *key);
 listNode *listIndex(list *list, long index);
-void listRewind(list *list, listIter *li);
-void listRewindTail(list *list, listIter *li);
-void listRotate(list *list);
+void listRewind(list *list, listIter *li);				//重置迭代器方向从头开始
+void listRewindTail(list *list, listIter *li);			//重置迭代器方向从尾部开始
+void listRotate(list *list);							//链表旋转
 
 /* Directions for iterators */
 #define AL_START_HEAD 0

@@ -46,11 +46,12 @@
  * The string is always null-termined (all the sds strings are, always) so
  * even if you create an sds string with:
  *
- * mystring = sdsnewlen("abc",3");
+ * mystring = sdsnewlen("abc",3);
  *
  * You can print the string with printf() as there is an implicit \0 at the
  * end of the string. However the string is binary safe and can contain
  * \0 characters in the middle, as the length is stored in the sds header. */
+//根据指定的指针和长度创建一个新的字符串，新字符串以空白符结束
 sds sdsnewlen(const void *init, size_t initlen) {
     struct sdshdr *sh;
 
@@ -112,7 +113,7 @@ void sdsupdatelen(sds s) {
     sh->len = reallen;
 }
 
-/* Modify an sds string on-place to make it empty (zero length).
+/* Modify an sds string in-place to make it empty (zero length).
  * However all the existing buffer is not discarded but set as free space
  * so that next append operations will not require allocations up to the
  * number of bytes previously available. */
@@ -129,12 +130,13 @@ void sdsclear(sds s) {
  *
  * Note: this does not change the *length* of the sds string as returned
  * by sdslen(), but only the free buffer space we have. */
+//增加未使用空间达到至少addlen大小
 sds sdsMakeRoomFor(sds s, size_t addlen) {
     struct sdshdr *sh, *newsh;
     size_t free = sdsavail(s);
     size_t len, newlen;
 
-    if (free >= addlen) return s;
+    if (free >= addlen) return s;					//目前大小超过addlen，则不用扩增
     len = sdslen(s);
     sh = (void*) (s-(sizeof(struct sdshdr)));
     newlen = (len+addlen);
@@ -155,6 +157,7 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
  *
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
+//移除未使用空间
 sds sdsRemoveFreeSpace(sds s) {
     struct sdshdr *sh;
 
@@ -171,6 +174,7 @@ sds sdsRemoveFreeSpace(sds s) {
  * 3) The free buffer at the end if any.
  * 4) The implicit null term.
  */
+//获取字符串的总长度，包括sdshdr结构体、字符串、未使用空间和结尾空白符
 size_t sdsAllocSize(sds s) {
     struct sdshdr *sh = (void*) (s-(sizeof(struct sdshdr)));
 
@@ -200,16 +204,20 @@ size_t sdsAllocSize(sds s) {
  * ... check for nread <= 0 and handle it ...
  * sdsIncrLen(s, nread);
  */
+//增加sds的长度，减少未使用空间的长度，string的总长度没有变化，incr可能包括正/负两种情况
 void sdsIncrLen(sds s, int incr) {
     struct sdshdr *sh = (void*) (s-(sizeof(struct sdshdr)));
 
+	//incr是正数，sds长度增加，未使用空间缩小
     if (incr >= 0)
         assert(sh->free >= (unsigned int)incr);
+	//incr是负数
     else
         assert(sh->len >= (unsigned int)(-incr));
     sh->len += incr;
     sh->free -= incr;
-    s[sh->len] = '\0';
+	//空白符代表着字符串结束
+    s[sh->len] = '\0';			
 }
 
 /* Grow the sds to have the specified length. Bytes that were not part of
@@ -217,17 +225,22 @@ void sdsIncrLen(sds s, int incr) {
  *
  * if the specified length is smaller than the current length, no operation
  * is performed. */
+//将sds的buf长度扩展至给定长度，未使用部分用\0空字符填充，buf扩展后的有效长度不一定都有内容填充，在len长度内的尾部也可能
+//有为填充字符，所以该方法只是扩充了长度，实际sds内容长度并未变化，具体作何用途，尚未清楚！！！
 sds sdsgrowzero(sds s, size_t len) {
     struct sdshdr *sh = (void*)(s-(sizeof(struct sdshdr)));
     size_t totlen, curlen = sh->len;
 
+	//现有长度 >= 指定长度，不扩展
     if (len <= curlen) return s;
     s = sdsMakeRoomFor(s,len-curlen);
     if (s == NULL) return NULL;
 
     /* Make sure added region doesn't contain garbage */
+	//扩充的未使用部分全部用空白符填充
     sh = (void*)(s-(sizeof(struct sdshdr)));
     memset(s+curlen,0,(len-curlen+1)); /* also set trailing \0 byte */
+	//更新sdshdr属性
     totlen = sh->len+sh->free;
     sh->len = (int)len;
     sh->free = (int)(totlen-sh->len);
@@ -239,6 +252,7 @@ sds sdsgrowzero(sds s, size_t len) {
  *
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
+//在sds的尾部添加len长度的t，
 sds sdscatlen(sds s, const void *t, size_t len) {
     struct sdshdr *sh;
     size_t curlen = sdslen(s);
@@ -246,9 +260,12 @@ sds sdscatlen(sds s, const void *t, size_t len) {
     s = sdsMakeRoomFor(s,len);
     if (s == NULL) return NULL;
     sh = (void*) (s-(sizeof(struct sdshdr)));
+	//复制t到sds尾部
     memcpy(s+curlen, t, len);
+	//更新属性
     sh->len = (int)(curlen+len);
     sh->free = (int)(sh->free-len);
+	//添加字符串终结符
     s[curlen+len] = '\0';
     return s;
 }
@@ -257,6 +274,7 @@ sds sdscatlen(sds s, const void *t, size_t len) {
  *
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
+//将一个char数组拼接到sds末尾
 sds sdscat(sds s, const char *t) {
     return sdscatlen(s, t, strlen(t));
 }
@@ -265,22 +283,27 @@ sds sdscat(sds s, const char *t) {
  *
  * After the call, the modified sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
+//两个sds的拼接
 sds sdscatsds(sds s, const sds t) {
     return sdscatlen(s, t, sdslen(t));
 }
 
 /* Destructively modify the sds string 's' to hold the specified binary
  * safe string pointed by 't' of length 'len' bytes. */
+//将一个char数组的前len个字节拷贝到sds
 sds sdscpylen(sds s, const char *t, size_t len) {
     struct sdshdr *sh = (void*) (s-(sizeof(struct sdshdr)));
     size_t totlen = sh->free+sh->len;
 
+	//如果sds的buf长度不足，就需要扩展
     if (totlen < len) {
+		//buf扩充超出的长度部分
         s = sdsMakeRoomFor(s,len-sh->len);
         if (s == NULL) return NULL;
         sh = (void*) (s-(sizeof(struct sdshdr)));
         totlen = sh->free+sh->len;
     }
+	//内容拷贝
     memcpy(s, t, len);
     s[len] = '\0';
     sh->len = (int)len;
@@ -290,6 +313,7 @@ sds sdscpylen(sds s, const char *t, size_t len) {
 
 /* Like sdscpylen() but 't' must be a null-termined string so that the length
  * of the string is obtained with strlen(). */
+//字符数组的全拷贝
 sds sdscpy(sds s, const char *t) {
     return sdscpylen(s, t, strlen(t));
 }
@@ -298,9 +322,11 @@ sds sdscpy(sds s, const char *t) {
  * conversion. 's' must point to a string with room for at least
  * SDS_LLSTR_SIZE bytes.
  *
- * The function returns the lenght of the null-terminated string
+ * The function returns the length of the null-terminated string
  * representation stored at 's'. */
 #define SDS_LLSTR_SIZE 21
+
+//将有符号数转换到指定位置的字符串。
 int sdsll2str(char *s, long long value) {
     char *p, aux;
     unsigned long long v;
@@ -308,6 +334,7 @@ int sdsll2str(char *s, long long value) {
 
     /* Generate the string representation, this method produces
      * an reversed string. */
+	//判断正负，暂时只处理正值部分，正负号后期再处理
     v = (value < 0) ? -value : value;
     p = s;
     do {
@@ -321,6 +348,7 @@ int sdsll2str(char *s, long long value) {
     *p = '\0';
 
     /* Reverse the string. */
+	//翻转
     p--;
     while(s < p) {
         aux = *s;
@@ -365,14 +393,17 @@ int sdsull2str(char *s, unsigned long long v) {
  *
  * sdscatprintf(sdsempty(),"%lld\n", value);
  */
+//将数值类型转换成字符串类型
 sds sdsfromlonglong(long long value) {
     char buf[SDS_LLSTR_SIZE];
+	//
     int len = sdsll2str(buf,value);
 
     return sdsnewlen(buf,len);
 }
 
-/* Like sdscatpritf() but gets va_list instead of being variadic. */
+/* Like sdscatprintf() but gets va_list instead of being variadic. */
+//？？？？？？？？？？
 sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
     va_list cpy;
     char staticbuf[1024], *buf = staticbuf, *t;
@@ -398,7 +429,7 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
 #else
         vsnprintf(buf, buflen, fmt, cpy);
 #endif
-        va_end(ap);
+        va_end(cpy);
         if (buf[buflen-2] != '\0') {
             if (buf != staticbuf) zfree(buf);
             buflen *= 2;
@@ -431,7 +462,7 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
  *
  * Example:
  *
- * s = sdsempty("Sum is: ");
+ * s = sdsnew("Sum is: ");
  * s = sdscatprintf(s,"%d+%d = %d",a,b,a+b).
  *
  * Often you need to create a string from scratch with the printf-alike
@@ -464,6 +495,7 @@ sds sdscatprintf(sds s, const char *fmt, ...) {
  * %U - 64 bit unsigned integer (unsigned long long, uint64_t)
  * %% - Verbatim "%" character.
  */
+//
 sds sdscatfmt(sds s, char const *fmt, ...) {
     struct sdshdr *sh = (void*) (s-(sizeof(struct sdshdr)));
     size_t initlen = sdslen(s);
@@ -478,7 +510,7 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
         char next, *str;
         unsigned int l;
         long long num;
-        unsigned long long unum;
+        unsigned long long unum;  
 
         /* Make sure there is always space for at least 1 char. */
         if (sh->free == 0) {
@@ -659,8 +691,8 @@ void sdstoupper(sds s) {
  *
  * Return value:
  *
- *     1 if s1 > s2.
- *    -1 if s1 < s2.
+ *     positive if s1 > s2.
+ *     negative if s1 < s2.
  *     0 if s1 and s2 are exactly the same binary string.
  *
  * If two strings share exactly the same prefix, but one of the two has

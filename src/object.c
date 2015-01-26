@@ -74,31 +74,49 @@ robj *createStringObjectFromLongLong(long long value) {
     return o;
 }
 
-/* Note: this function is defined into object.c since here it is where it
- * belongs but it is actually designed to be used just for INCRBYFLOAT */
-robj *createStringObjectFromLongDouble(long double value) {
+/* Create a string object from a long double. If humanfriendly is non-zero
+ * it does not use exponential format and trims trailing zeroes at the end,
+ * however this results in loss of precision. Otherwise exp format is used
+ * and the output of snprintf() is not modified.
+ *
+ * The 'humanfriendly' option is used for INCRBYFLOAT and HINCRBYFLOAT. */
+robj *createStringObjectFromLongDouble(long double value, int humanfriendly) {
     char buf[256];
     int len;
 
-    /* We use 17 digits precision since with 128 bit floats that precision
-     * after rounding is able to represent most small decimal numbers in a way
-     * that is "non surprising" for the user (that is, most small decimal
-     * numbers will be represented in a way that when converted back into
-     * a string are exactly the same as what the user typed.) */
+    if (isinf(value)) {
+        /* Libc in odd systems (Hi Solaris!) will format infinite in a
+         * different way, so better to handle it in an explicit way. */
+        if (value > 0) {
+            memcpy(buf,"inf",3);
+            len = 3;
+        } else {
+            memcpy(buf,"-inf",4);
+            len = 4;
+        }
+    } else if (humanfriendly) {
+        /* We use 17 digits precision since with 128 bit floats that precision
+         * after rounding is able to represent most small decimal numbers in a
+         * way that is "non surprising" for the user (that is, most small
+         * decimal numbers will be represented in a way that when converted
+         * back into a string are exactly the same as what the user typed.) */
 #ifdef _WIN32
     /* on Windows the magic number is 15 */
     len = snprintf(buf,sizeof(buf),"%.15Lf", value);
 #else
-    len = snprintf(buf,sizeof(buf),"%.17Lf", value);
+        len = snprintf(buf,sizeof(buf),"%.17Lf", value);
 #endif
-    /* Now remove trailing zeroes after the '.' */
-    if (strchr(buf,'.') != NULL) {
-        char *p = buf+len-1;
-        while(*p == '0') {
-            p--;
-            len--;
+        /* Now remove trailing zeroes after the '.' */
+        if (strchr(buf,'.') != NULL) {
+            char *p = buf+len-1;
+            while(*p == '0') {
+                p--;
+                len--;
+            }
+            if (*p == '.') len--;
         }
-        if (*p == '.') len--;
+    } else {
+        len = snprintf(buf,sizeof(buf),"%.17Lg", value);
     }
     return createStringObject(buf,len);
 }
@@ -109,10 +127,10 @@ robj *dupStringObject(robj *o) {
 }
 
 robj *createListObject(void) {
-    list *l = listCreate();
-    robj *o = createObject(REDIS_LIST,l);
-    listSetFreeMethod(l,decrRefCountVoid);
-    o->encoding = REDIS_ENCODING_LINKEDLIST;
+    list *l = listCreate();							//使用双端链表，这是真正的创建对象
+    robj *o = createObject(REDIS_LIST,l);			//创建对象，这里实际就是个指针指向地址的配置
+    listSetFreeMethod(l,decrRefCountVoid);			//设置decRefCount作为值的释放器
+    o->encoding = REDIS_ENCODING_LINKEDLIST;		//设置编码
     return o;
 }
 
