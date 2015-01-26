@@ -403,7 +403,7 @@ sds sdsfromlonglong(long long value) {
 }
 
 /* Like sdscatprintf() but gets va_list instead of being variadic. */
-//？？？？？？？？？？
+//按照fmt的格式，将ap中的string输出
 sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
     va_list cpy;
     char staticbuf[1024], *buf = staticbuf, *t;
@@ -425,11 +425,11 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
         va_copy(cpy,ap);
 #ifdef _WIN32
         // see comment below
-        vsnprintf(buf, buflen-1, fmt, cpy);
+        vsnprintf(buf, buflen-1, fmt, cpy);				// from stdio.h
 #else
         vsnprintf(buf, buflen, fmt, cpy);
 #endif
-        va_end(cpy);
+        va_end(cpy);									//置0
         if (buf[buflen-2] != '\0') {
             if (buf != staticbuf) zfree(buf);
             buflen *= 2;
@@ -610,6 +610,7 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
  *
  * Output will be just "Hello World".
  */
+//删除指定的字符，剩下的字符返回
 sds sdstrim(sds s, const char *cset) {
     struct sdshdr *sh = (void*) (s-(sizeof(struct sdshdr)));
     char *start, *end, *sp, *ep;
@@ -617,13 +618,13 @@ sds sdstrim(sds s, const char *cset) {
 
     sp = start = s;
     ep = end = s+sdslen(s)-1;
-    while(sp <= end && strchr(cset, *sp)) sp++;
-    while(ep > start && strchr(cset, *ep)) ep--;
-    len = (sp > ep) ? 0 : ((ep-sp)+1);
-    if (sh->buf != sp) memmove(sh->buf, sp, len);
-    sh->buf[len] = '\0';
-    sh->free = sh->free+(int)(sh->len-len);
-    sh->len = (int)len;
+    while(sp <= end && strchr(cset, *sp)) sp++;			//移除左边色部分
+    while(ep > start && strchr(cset, *ep)) ep--;		//移除右边的部分
+    len = (sp > ep) ? 0 : ((ep-sp)+1);					//检查是否有剩余，避免空字符串
+    if (sh->buf != sp) memmove(sh->buf, sp, len);		//如果发生了删除行为，移到开头
+    sh->buf[len] = '\0';								//添加结束符
+    sh->free = sh->free+(int)(sh->len-len);				//未使用部分扩大
+    sh->len = (int)len;									//更新
     return s;
 }
 
@@ -643,20 +644,25 @@ sds sdstrim(sds s, const char *cset) {
  * s = sdsnew("Hello World");
  * sdsrange(s,1,-1); => "ello World"
  */
+
+//根据游标切割字符串
 void sdsrange(sds s, int start, int end) {
     struct sdshdr *sh = (void*) (s-(sizeof(struct sdshdr)));
     size_t newlen, len = sdslen(s);
 
     if (len == 0) return;
+	//转换负数上标，如果仍然小于0，从0开始
     if (start < 0) {
         start = (int)len+start;
         if (start < 0) start = 0;
     }
+	//转换负数下标，如果仍然小于0，从0开始
     if (end < 0) {
         end = (int)len+end;
         if (end < 0) end = 0;
     }
     newlen = (start > end) ? 0 : (end-start)+1;
+	//确保指定的游标存在于字符串的范围之内，长度值小于第一个字符/大于最后一个字符的都是不存在的
     if (newlen != 0) {
         if (start >= (signed)len) {
             newlen = 0;
@@ -667,9 +673,9 @@ void sdsrange(sds s, int start, int end) {
     } else {
         start = 0;
     }
-    if (start && newlen) memmove(sh->buf, sh->buf+start, newlen);
-    sh->buf[newlen] = 0;
-    sh->free = (int)(sh->free+(sh->len-newlen));
+    if (start && newlen) memmove(sh->buf, sh->buf+start, newlen);	//字符串前移
+    sh->buf[newlen] = 0;	//置结束符
+    sh->free = (int)(sh->free+(sh->len-newlen));		//跟新属性
     sh->len = (int)newlen;
 }
 
@@ -705,7 +711,7 @@ int sdscmp(const sds s1, const sds s2) {
     l1 = sdslen(s1);
     l2 = sdslen(s2);
     minlen = (l1 < l2) ? l1 : l2;
-    cmp = memcmp(s1,s2,minlen);
+    cmp = memcmp(s1,s2,minlen);			//cmp = (s1 > s2)? postive : negative
     if (cmp == 0) return (int)(l1-l2);
     return cmp;
 }
@@ -726,6 +732,7 @@ int sdscmp(const sds s1, const sds s2) {
  * requires length arguments. sdssplit() is just the
  * same function but for zero-terminated strings.
  */
+//字符串的切分
 sds *sdssplitlen(const char *s, int len, const char *sep, int seplen, int *count) {
     int elements = 0, slots = 5, start = 0, j;
     sds *tokens;
